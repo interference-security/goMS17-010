@@ -8,6 +8,8 @@ import (
 	"net"
 	"sync"
 	"time"
+	"bufio"
+	"os"
 )
 
 var (
@@ -23,7 +25,7 @@ func detectHost(ip string) {
 	timeout := time.Second * 2
 	conn, err := net.DialTimeout("tcp", ip+":445", timeout)
 	if err != nil {
-		fmt.Printf("failed to connect to %s\n", ip)
+		fmt.Printf("%s, Failed to connect\n", ip)
 		return
 	}
 
@@ -49,7 +51,7 @@ func detectHost(ip string) {
 
 	if binary.LittleEndian.Uint32(reply[9:13]) != 0 {
 		// recv error
-		fmt.Printf("can't determine whether %s is vulnerable or not\n", ip)
+		fmt.Printf("%s, Can't determine whether it is vulnerable or not\n", ip)
 		return
 	}
 
@@ -94,10 +96,10 @@ func detectHost(ip string) {
 	}
 
 	if reply[9] == 0x05 && reply[10] == 0x02 && reply[11] == 0x00 && reply[12] == 0xc0 {
-		fmt.Printf("%s(%s) is likely VULNERABLE to MS17-010!\n", ip, os)
+		fmt.Printf("%s, (%s) is likely VULNERABLE to MS17-010\n", ip, os)
 
 		// detect present of DOUBLEPULSAR SMB implant
-		trans2SessionSetupRequest[28] = treeID[0]
+		/*trans2SessionSetupRequest[28] = treeID[0]
 		trans2SessionSetupRequest[29] = treeID[1]
 		trans2SessionSetupRequest[32] = userID[0]
 		trans2SessionSetupRequest[33] = userID[1]
@@ -110,10 +112,10 @@ func detectHost(ip string) {
 
 		if reply[34] == 0x51 {
 			fmt.Printf("DOUBLEPULSAR SMB IMPLANT in %s\n", ip)
-		}
+		}*/
 
 	} else {
-		fmt.Printf("%s(%s) stays in safety\n", ip, os)
+		fmt.Printf("%s, (%s) stays in safety\n", ip, os)
 	}
 
 }
@@ -130,13 +132,24 @@ func incIP(ip net.IP) {
 func main() {
 	host := flag.String("h", "", "host")
 	netCIDR := flag.String("n", "", "CIDR Notation of a network")
+	targetfile := flag.String("f", "", "Input file with target on each line")
 	flag.Parse()
 
 	if *host != "" {
 		detectHost(*host)
 	}
 
-	if *netCIDR != "" && *host == "" {
+	if *targetfile != "" {
+		fileHandle, _ := os.Open(*targetfile)
+		defer fileHandle.Close()
+		fileScanner := bufio.NewScanner(fileHandle)
+		for fileScanner.Scan() {
+			fmt.Println("[*] Scanning",fileScanner.Text())
+			detectHost(fileScanner.Text())
+		}		
+	}
+
+	if *netCIDR != "" {
 		ip, ipNet, err := net.ParseCIDR(*netCIDR)
 		if err != nil {
 			fmt.Println("invalid value for -n option")
